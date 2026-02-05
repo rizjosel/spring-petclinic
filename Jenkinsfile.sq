@@ -21,20 +21,21 @@ pipeline {
     }
 
     stage('SonarQube Analysis') {
-      when {
-        expression { env.CHANGE_ID != null }
-      }
-      steps {
-        withSonarQubeEnv('sonarqube') {
-          sh """
-            mvn sonar:sonar \
-              -Dsonar.projectKey=springboot-demo \
-              -Dsonar.pullrequest.key=${CHANGE_ID} \
-              -Dsonar.pullrequest.branch=${CHANGE_BRANCH} \
-              -Dsonar.pullrequest.base=${CHANGE_TARGET}
-          """
+        when {
+            expression { env.CHANGE_ID != null }
         }
-      }
+        steps {
+            withSonarQubeEnv('sonarqube') {
+                sh """
+                mvn clean verify sonar:sonar \
+                    -Dsonar.projectKey=springboot-demo \
+                    -Dsonar.pullrequest.key=${CHANGE_ID} \
+                    -Dsonar.pullrequest.branch=${CHANGE_BRANCH} \
+                    -Dsonar.pullrequest.base=${CHANGE_TARGET} \
+                    -Dsonar.login=${SONAR_AUTH_TOKEN}
+                """
+            }
+        }
     }
 
     stage('Quality Gate') {
