@@ -1,0 +1,51 @@
+pipeline {
+  agent any
+
+  tools {
+    maven 'maven'
+    jdk 'jdk17'
+  }
+
+  stages {
+
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Build & Test') {
+      steps {
+        sh 'mvn clean verify'
+      }
+    }
+
+    stage('SonarQube Analysis') {
+      when {
+        expression { env.CHANGE_ID != null }
+      }
+      steps {
+        withSonarQubeEnv('sonarqube') {
+          sh """
+            mvn sonar:sonar \
+              -Dsonar.projectKey=springboot-demo \
+              -Dsonar.pullrequest.key=${CHANGE_ID} \
+              -Dsonar.pullrequest.branch=${CHANGE_BRANCH} \
+              -Dsonar.pullrequest.base=${CHANGE_TARGET}
+          """
+        }
+      }
+    }
+
+    stage('Quality Gate') {
+      when {
+        expression { env.CHANGE_ID != null }
+      }
+      steps {
+        timeout(time: 5, unit: 'MINUTES') {
+          waitForQualityGate abortPipeline: true
+        }
+      }
+    }
+  }
+}
