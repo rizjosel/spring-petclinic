@@ -1,68 +1,61 @@
 pipeline {
-  agent any
+    agent any
 
-  tools {
-    maven 'maven'
-    jdk 'jdk17'
-  }
-
-  environment {
-      GITHUB_CONTEXT = "CI / SonarQube Quality Gate"
-  }
-
-  stages {
-
-    stage('Checkout') {
-      steps {
-        checkout scm
-      }
+    tools {
+        maven 'maven'
+        jdk 'jdk17'
     }
 
-    stage('Build & Test') {
-      steps {
-        sh 'mvn clean verify'
-      }
-    }
+    stages {
 
-    stage('SonarQube Analysis') {
-      when {
-        expression { env.CHANGE_ID != null }
-      }
-      steps {
-        withSonarQubeEnv('sonarqube') {
-          sh """
-          mvn sonar:sonar \
-              -Dsonar.projectKey=springboot-demo \
-              -Dsonar.pullrequest.key=${CHANGE_ID} \
-              -Dsonar.pullrequest.branch=${CHANGE_BRANCH} \
-              -Dsonar.pullrequest.base=${CHANGE_TARGET} \
-              -Dsonar.login=${SONAR_AUTH_TOKEN}
-          """
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
         }
-      }
-    }
 
-    stage('Quality Gate') {
-      when {
-        expression { env.CHANGE_ID != null }
-      }
-      steps {
-        timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
+        stage('Build & Test') {
+            steps {
+                sh 'mvn clean verify'
+            }
         }
-      }
-    }
-  }
 
-  post {
-    success {
-      githubNotify context: "${GITHUB_CONTEXT}", status: 'SUCCESS', description: 'SonarQube Quality Gate passed'
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh """
+                    mvn clean verify sonar:sonar \
+                        -Dsonar.projectKey=springboot-demo \
+                        -Dsonar.login=${SONAR_AUTH_TOKEN}
+                    """
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        // Wait for quality gate and fail build if not passed
+                        def qg = waitForQualityGate abortPipeline: true
+                        echo "SonarQube Quality Gate: ${qg.status}"
+                        if (qg.status != 'OK') {
+                            error "Quality Gate failed, aborting pipeline!"
+                        }
+                    }
+                }
+            }
+        }
+
     }
-    failure {
-      githubNotify context: "${GITHUB_CONTEXT}", status: 'FAILURE', description: 'SonarQube Quality Gate failed'
+
+    post {
+        always {
+            echo "Pipeline finished. Status: ${currentBuild.currentResult}"
+        }
     }
-  }
 }
+
 /*
 pipeline {
     agent any
