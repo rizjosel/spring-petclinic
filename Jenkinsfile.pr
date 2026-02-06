@@ -9,34 +9,25 @@ pipeline {
     }
 
     stages {
-
-        stage('List Workspace') {
-            steps {
-                sh 'ls -l'
-            }
-        }
-
-        stage('CI / Unit Tests') {
-            steps {
-                sh './gradlew clean build -x test'
-                //junit 'build/test-results/test/*.xml'
-            }
-        }
-
-        stage('CI / Docker Build') {
-            steps {
-                sh "docker build -t ${IMAGE_NAME} ."
-            }
-        }
-
-        stage('CI / Docker Integration') {
+        stage('CI / Unit Tests & Docker') {
             steps {
                 script {
                     try {
+                        // Run your commands
+                        sh './gradlew clean build -x test'
+                        sh "docker build -t ${IMAGE_NAME} ."
                         sh "docker run -d --name ${APP_NAME}-test -p 18080:8080 ${IMAGE_NAME}"
                         sh "sleep 15"
                         sh "curl -f http://localhost:18080/actuator/health"
+                        
+                        // Notify GitHub of SUCCESS
+                        githubNotify context: 'CI / Unit Test', status: 'SUCCESS'
+                    } catch (e) {
+                        // Notify GitHub of FAILURE
+                        githubNotify context: 'CI / Unit Test', status: 'FAILURE'
+                        throw e
                     } finally {
+                        // Clean up
                         sh "docker stop ${APP_NAME}-test || true"
                         sh "docker rm ${APP_NAME}-test || true"
                     }
