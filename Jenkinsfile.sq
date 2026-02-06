@@ -6,6 +6,52 @@ pipeline {
         jdk 'jdk17'
     }
 
+    stages {
+
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Build & SonarQube') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=springboot-demo'
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    script {
+                        def qg = waitForQualityGate abortPipeline: true
+                        // Notify GitHub of the build status
+                        githubNotify context: 'SonarQube', status: qg.status
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            echo "SonarQube scan finished. Status sent to GitHub."
+        }
+    }
+}
+
+/*
+// for prs
+pipeline {
+    agent any
+
+    tools {
+        maven 'maven'
+        jdk 'jdk17'
+    }
+
     environment {
         SONAR_TOKEN = credentials('sonarqube') // Jenkins credential
         PROJECT_KEY = "spring-petclinic"
@@ -43,6 +89,7 @@ pipeline {
         }
     }
 }
+*/
 
 
 /*
