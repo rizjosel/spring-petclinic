@@ -44,7 +44,10 @@ pipeline {
       }
       steps {
         timeout(time: 5, unit: 'MINUTES') {
-          waitForQualityGate abortPipeline: true
+          script {
+              def qg = waitForQualityGate abortPipeline: true
+              githubNotify context: 'CI / SonarQube Quality Gate', status: qg.status
+          }
         }
       }
     }
