@@ -9,27 +9,36 @@ pipeline {
     }
 
     stages {
-        stage('CI / Unit Tests & Docker') {
+
+        stage('List Workspace') {
+            steps {
+                sh 'ls -l'
+            }
+        }
+
+        stage('CI / Unit Tests') {
+            steps {
+                sh './gradlew clean build -x test'
+                // junit 'build/test-results/test/*.xml'
+            }
+        }
+
+        stage('CI / Docker Build') {
+            steps {
+                sh "docker build -t ${IMAGE_NAME} ."
+            }
+        }
+
+        stage('CI / Docker Integration') {
             steps {
                 script {
-                    withChecks(context: 'CI / Unit Test', status: 'IN_PROGRESS') {
-                        try {
-                            // Run your commands
-                            sh './gradlew clean build -x test'
-                            sh "docker build -t ${IMAGE_NAME} ."
-                            sh "docker run -d --name ${APP_NAME}-test -p 18080:8080 ${IMAGE_NAME}"
-                            sh "sleep 15"
-                            sh "curl -f http://localhost:18080/actuator/health"
-                            
-                            // Mark SUCCESS
-                            currentBuild.result = 'SUCCESS'
-                        } catch (e) {
-                            currentBuild.result = 'FAILURE'
-                            throw e
-                        } finally {
-                            sh "docker stop ${APP_NAME}-test || true"
-                            sh "docker rm ${APP_NAME}-test || true"
-                        }
+                    try {
+                        sh "docker run -d --name ${APP_NAME}-test -p 18080:8080 ${IMAGE_NAME}"
+                        sh "sleep 15"
+                        sh "curl -f http://localhost:18080/actuator/health"
+                    } finally {
+                        sh "docker stop ${APP_NAME}-test || true"
+                        sh "docker rm ${APP_NAME}-test || true"
                     }
                 }
             }
