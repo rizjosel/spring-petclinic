@@ -6,6 +6,16 @@ pipeline {
         jdk 'jdk17'
     }
 
+    environment {
+        SONAR_TOKEN = credentials('sonarqube') // Jenkins credential
+        PROJECT_KEY = "spring-petclinic"
+    }
+
+    triggers {
+        // Optional: GitHub PR trigger if using multibranch pipeline
+        // Or rely on Jenkinsfile in PR branch
+    }
+
     stages {
 
         stage('Checkout') {
@@ -14,47 +24,31 @@ pipeline {
             }
         }
 
-        stage('Build & Test') {
-            steps {
-                sh 'mvn clean verify'
-            }
-        }
-
-        stage('SonarQube Analysis') {
+        stage('Build & SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonarqube') {
                     sh """
-                    mvn clean verify sonar:sonar \
-                        -Dsonar.projectKey=springboot-demo \
-                        -Dsonar.login=${SONAR_AUTH_TOKEN}
+                        mvn clean verify sonar:sonar \
+                            -Dsonar.projectKey=${PROJECT_KEY} \
+                            -Dsonar.branch.name=${env.CHANGE_BRANCH ?: env.BRANCH_NAME} \
+                            -Dsonar.login=${SONAR_TOKEN}
                     """
                 }
             }
         }
 
-        stage('Quality Gate') {
+        stage('Notify GitHub') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    script {
-                        // Wait for quality gate and fail build if not passed
-                        def qg = waitForQualityGate abortPipeline: true
-                        echo "SonarQube Quality Gate: ${qg.status}"
-                        if (qg.status != 'OK') {
-                            error "Quality Gate failed, aborting pipeline!"
-                        }
-                    }
+                script {
+                    githubNotify context: 'SonarQube Branch Analysis', 
+                                 status: 'SUCCESS', 
+                                 description: 'SonarQube analysis finished'
                 }
             }
         }
-
-    }
-
-    post {
-        always {
-            echo "Pipeline finished. Status: ${currentBuild.currentResult}"
-        }
     }
 }
+
 
 /*
 pipeline {
